@@ -1,6 +1,23 @@
 -- DotA implementation in MOOSE
 -- DotA overview: https://www.oneesports.gg/dota2/dota-2-beginners-guide/
 
+MESSAGE:New("DOTA: LOAD START", 10):ToAll()
+-- =================
+-- WHAT'S NEW
+--
+-- Reload script added to .miz 
+-- - No more restarting the mission. Just save your lua changes, then: 
+--   - Comms Menu->Other->Reload DOTA
+-- - (Expects lua file to be in c:\lua\dota.lua - feel free to change)
+-- - Some schedulers may currently end up duplicated
+--
+-- Unit spawning/routing working
+-- - Spawn scheduler adjusted to just spawn once while testing
+-- - Looks like they do drive-bys, stopping for nothing. Need some further behaviour modification.
+--
+-- Zone callbacks throwing errors - just commented out for now
+--
+-- =================
 
 -- TODO:
 -- * slot blocking
@@ -78,6 +95,7 @@ function creep_template_name(team, level)
     return team .. "-" .. CREEP .. "-" .. level
 end
 
+KMH_TO_M_PER_S = 0.277778
 
 ---------------------------
 --          Zones        --
@@ -87,120 +105,147 @@ end
 -- https://flightcontrol-master.github.io/MOOSE_DOCS/Documentation/Functional.ZoneCaptureCoalition.html
 -- https://flightcontrol-master.github.io/MOOSE_DOCS/Documentation/Functional.ZoneGoalCoalition.html
 
+function stringifyZoneName(name)
+    return ZONE:FindByName(name)
+end
 local OBSERVATION_INTERVAL_SECONDS = 5
 
 local CAPTURE_ZONES = {
-    ZONE_CAPTURE_COALITION::New(ZONE:FindByName(TEAM_BLUE .. "-" .. BASE), coalition.side.BLUE),
-    ZONE_CAPTURE_COALITION::New(ZONE:FindByName(TEAM_RED  .. "-" .. BASE), coalition.side.RED),
+    ZONE_CAPTURE_COALITION:New(ZONE:FindByName(TEAM_BLUE .. "-" .. BASE), coalition.side.BLUE),
+    ZONE_CAPTURE_COALITION:New(ZONE:FindByName(TEAM_RED  .. "-" .. BASE), coalition.side.RED),
 
-    ZONE_CAPTURE_COALITION::New(ZONE:FindByName(point_name(LANE_NORTH, POINT_1)), coalition.side.BLUE),
-    ZONE_CAPTURE_COALITION::New(ZONE:FindByName(point_name(LANE_NORTH, POINT_2)), coalition.side.BLUE),
-    ZONE_CAPTURE_COALITION::New(ZONE:FindByName(point_name(LANE_NORTH, POINT_3)), coalition.side.BLUE),
-    ZONE_CAPTURE_COALITION::New(ZONE:FindByName(point_name(LANE_NORTH, POINT_4)), coalition.side.RED),
-    ZONE_CAPTURE_COALITION::New(ZONE:FindByName(point_name(LANE_NORTH, POINT_5)), coalition.side.RED),
-    ZONE_CAPTURE_COALITION::New(ZONE:FindByName(point_name(LANE_NORTH, POINT_6)), coalition.side.RED),
+    ZONE_CAPTURE_COALITION:New(ZONE:FindByName(point_name(LANE_NORTH, POINT_1)), coalition.side.BLUE),
+    ZONE_CAPTURE_COALITION:New(ZONE:FindByName(point_name(LANE_NORTH, POINT_2)), coalition.side.BLUE),
+    ZONE_CAPTURE_COALITION:New(ZONE:FindByName(point_name(LANE_NORTH, POINT_3)), coalition.side.BLUE),
+    ZONE_CAPTURE_COALITION:New(ZONE:FindByName(point_name(LANE_NORTH, POINT_4)), coalition.side.RED),
+    ZONE_CAPTURE_COALITION:New(ZONE:FindByName(point_name(LANE_NORTH, POINT_5)), coalition.side.RED),
+    ZONE_CAPTURE_COALITION:New(ZONE:FindByName(point_name(LANE_NORTH, POINT_6)), coalition.side.RED),
 
-    ZONE_CAPTURE_COALITION::New(ZONE:FindByName(point_name(LANE_CENTRE, POINT_1)), coalition.side.BLUE),
-    ZONE_CAPTURE_COALITION::New(ZONE:FindByName(point_name(LANE_CENTRE, POINT_2)), coalition.side.BLUE),
-    ZONE_CAPTURE_COALITION::New(ZONE:FindByName(point_name(LANE_CENTRE, POINT_3)), coalition.side.BLUE),
-    ZONE_CAPTURE_COALITION::New(ZONE:FindByName(point_name(LANE_CENTRE, POINT_4)), coalition.side.RED),
-    ZONE_CAPTURE_COALITION::New(ZONE:FindByName(point_name(LANE_CENTRE, POINT_5)), coalition.side.RED),
-    ZONE_CAPTURE_COALITION::New(ZONE:FindByName(point_name(LANE_CENTRE, POINT_6)), coalition.side.RED),
+    ZONE_CAPTURE_COALITION:New(ZONE:FindByName(point_name(LANE_CENTRE, POINT_1)), coalition.side.BLUE),
+    ZONE_CAPTURE_COALITION:New(ZONE:FindByName(point_name(LANE_CENTRE, POINT_2)), coalition.side.BLUE),
+    ZONE_CAPTURE_COALITION:New(ZONE:FindByName(point_name(LANE_CENTRE, POINT_3)), coalition.side.BLUE),
+    ZONE_CAPTURE_COALITION:New(ZONE:FindByName(point_name(LANE_CENTRE, POINT_4)), coalition.side.RED),
+    ZONE_CAPTURE_COALITION:New(ZONE:FindByName(point_name(LANE_CENTRE, POINT_5)), coalition.side.RED),
+    ZONE_CAPTURE_COALITION:New(ZONE:FindByName(point_name(LANE_CENTRE, POINT_6)), coalition.side.RED),
 
-    ZONE_CAPTURE_COALITION::New(ZONE:FindByName(point_name(LANE_SOUTH, POINT_1)), coalition.side.BLUE),
-    ZONE_CAPTURE_COALITION::New(ZONE:FindByName(point_name(LANE_SOUTH, POINT_2)), coalition.side.BLUE),
-    ZONE_CAPTURE_COALITION::New(ZONE:FindByName(point_name(LANE_SOUTH, POINT_3)), coalition.side.BLUE),
-    ZONE_CAPTURE_COALITION::New(ZONE:FindByName(point_name(LANE_SOUTH, POINT_4)), coalition.side.RED),
-    ZONE_CAPTURE_COALITION::New(ZONE:FindByName(point_name(LANE_SOUTH, POINT_5)), coalition.side.RED),
-    ZONE_CAPTURE_COALITION::New(ZONE:FindByName(point_name(LANE_SOUTH, POINT_6)), coalition.side.RED),
+    ZONE_CAPTURE_COALITION:New(ZONE:FindByName(point_name(LANE_SOUTH, POINT_1)), coalition.side.BLUE),
+    ZONE_CAPTURE_COALITION:New(ZONE:FindByName(point_name(LANE_SOUTH, POINT_2)), coalition.side.BLUE),
+    ZONE_CAPTURE_COALITION:New(ZONE:FindByName(point_name(LANE_SOUTH, POINT_3)), coalition.side.BLUE),
+    ZONE_CAPTURE_COALITION:New(ZONE:FindByName(point_name(LANE_SOUTH, POINT_4)), coalition.side.RED),
+    ZONE_CAPTURE_COALITION:New(ZONE:FindByName(point_name(LANE_SOUTH, POINT_5)), coalition.side.RED),
+    ZONE_CAPTURE_COALITION:New(ZONE:FindByName(point_name(LANE_SOUTH, POINT_6)), coalition.side.RED),
 }
-
+MESSAGE:New("DOTA: REGISTERING ZONE CALLBACKS", 10):ToAll()
 -- register our callbacks for our zone
 for _, zone in ipairs(CAPTURE_ZONES) do
-    function zone:OnEnterGuarded(From, Event, To)
-        -- on capture, set the smoke to the new faction and print a message
-        if From ~= To then
-            local Coalition = self:GetCoalition()
-            self:E({Coalition = Coalition})
-            if Coalition == coalition.side.BLUE then
-                ZoneCaptureCoalition:Smoke(SMOKECOLOR.Blue)
-                US_CC:MessageTypeToCoalition(string.format("We have taken %s", ZoneCaptureCoalition:GetZoneName()), MESSAGE.Type.Information)
-                RU_CC:MessageTypeToCoalition(string.format("The enemy has taken %s", ZoneCaptureCoalition:GetZoneName()), MESSAGE.Type.Information)
-            else
-                ZoneCaptureCoalition:Smoke(SMOKECOLOR.Red)
-                RU_CC:MessageTypeToCoalition(string.format("We have taken %s", ZoneCaptureCoalition:GetZoneName()), MESSAGE.Type.Information)
-                US_CC:MessageTypeToCoalition(string.format("The enemy has taken %s", ZoneCaptureCoalition:GetZoneName()), MESSAGE.Type.Information)
-            end
-        end
-    end
+    -- function zone:OnEnterGuarded(From, Event, To)
+    --     -- on capture, set the smoke to the new faction and print a message
+    --     if From ~= To then
+    --         local Coalition = self:GetCoalition()
+    --         self:E({Coalition = Coalition})
+    --         if Coalition == coalition.side.BLUE then
+    --             ZoneCaptureCoalition:Smoke(SMOKECOLOR.Blue)
+    --             US_CC:MessageTypeToCoalition(string.format("We have taken %s", ZoneCaptureCoalition:GetZoneName()), MESSAGE.Type.Information)
+    --             RU_CC:MessageTypeToCoalition(string.format("The enemy has taken %s", ZoneCaptureCoalition:GetZoneName()), MESSAGE.Type.Information)
+    --         else
+    --             ZoneCaptureCoalition:Smoke(SMOKECOLOR.Red)
+    --             RU_CC:MessageTypeToCoalition(string.format("We have taken %s", ZoneCaptureCoalition:GetZoneName()), MESSAGE.Type.Information)
+    --             US_CC:MessageTypeToCoalition(string.format("The enemy has taken %s", ZoneCaptureCoalition:GetZoneName()), MESSAGE.Type.Information)
+    --         end
+    --     end
+    -- end
 
-    function zone:OnEnterAttacked()
-        -- on attacked, set the smoke to white and print a message
-        ZoneCaptureCoalition:Smoke(SMOKECOLOR.White)
-        local Coalition = self:GetCoalition()
-        self:E({Coalition = Coalition})
-        if Coalition == coalition.side.BLUE then
-            US_CC:MessageTypeToCoalition(string.format("The enemy is attacking %s", ZoneCaptureCoalition:GetZoneName()), MESSAGE.Type.Information)
-            RU_CC:MessageTypeToCoalition(string.format("We are attacking %s", ZoneCaptureCoalition:GetZoneName()), MESSAGE.Type.Information)
-        else
-            RU_CC:MessageTypeToCoalition(string.format("The enemy is attacking %s", ZoneCaptureCoalition:GetZoneName()), MESSAGE.Type.Information)
-            US_CC:MessageTypeToCoalition(string.format("We are attacking %s", ZoneCaptureCoalition:GetZoneName()), MESSAGE.Type.Information)
-        end
-    end
+    -- function zone:OnEnterAttacked()
+    --     -- on attacked, set the smoke to white and print a message
+    --     ZoneCaptureCoalition:Smoke(SMOKECOLOR.White)
+    --     local Coalition = self:GetCoalition()
+    --     self:E({Coalition = Coalition})
+    --     if Coalition == coalition.side.BLUE then
+    --         US_CC:MessageTypeToCoalition(string.format("The enemy is attacking %s", ZoneCaptureCoalition:GetZoneName()), MESSAGE.Type.Information)
+    --         RU_CC:MessageTypeToCoalition(string.format("We are attacking %s", ZoneCaptureCoalition:GetZoneName()), MESSAGE.Type.Information)
+    --     else
+    --         RU_CC:MessageTypeToCoalition(string.format("The enemy is attacking %s", ZoneCaptureCoalition:GetZoneName()), MESSAGE.Type.Information)
+    --         US_CC:MessageTypeToCoalition(string.format("We are attacking %s", ZoneCaptureCoalition:GetZoneName()), MESSAGE.Type.Information)
+    --     end
+    -- end
 
-    function zone:OnEnterEmpty()
-        -- replace the smoke with the current coalition's smoke
-        local Coalition = self:GetCoalition()
-        if Coalition == coalition.side.BLUE then
-            ZoneCaptureCoalition:Smoke(SMOKECOLOR.Blue)
-        else
-            ZoneCaptureCoalition:Smoke(SMOKECOLOR.Red)
-        end
-    end
+    -- function zone:OnEnterEmpty()
+    --     -- replace the smoke with the current coalition's smoke
+    --     local Coalition = self:GetCoalition()
+    --     if Coalition == coalition.side.BLUE then
+    --         ZoneCaptureCoalition:Smoke(SMOKECOLOR.Blue)
+    --     else
+    --         ZoneCaptureCoalition:Smoke(SMOKECOLOR.Red)
+    --     end
+    -- end
 
     -- start monitoring zones Ns after start, and then every Ms
-    zone:Start(OBSERVATION_INTERVAL_SECONDS, OBSERVATION_INTERVAL_SECONDS)
+    -- zone:Start(OBSERVATION_INTERVAL_SECONDS, OBSERVATION_INTERVAL_SECONDS)
 end
 
 -- Connections between zones
 -- specifies which point is next for each team
+-- NOTE: It did not work when using an actual Core.ZONE object as an index, so changed it to strings :p
+--       They are converted back to zones in route_from_zone()
 local ZONE_CONNECTIONS = {
     -- LANE_NORTH
-    [ZONE:FindByName(point_name(LANE_NORTH, POINT_1))]  = {[TEAM_RED] = ZONE:FindByName(TEAM_BLUE .. "-" .. BASE),         [TEAM_BLUE] = ZONE:FindByName(point_name(LANE_NORTH, POINT_2))},
-    [ZONE:FindByName(point_name(LANE_NORTH, POINT_2))]  = {[TEAM_RED] = ZONE:FindByName(point_name(LANE_NORTH, POINT_1)),  [TEAM_BLUE] = ZONE:FindByName(point_name(LANE_NORTH, POINT_3))},
-    [ZONE:FindByName(point_name(LANE_NORTH, POINT_3))]  = {[TEAM_RED] = ZONE:FindByName(point_name(LANE_NORTH, POINT_2)),  [TEAM_BLUE] = ZONE:FindByName(point_name(LANE_NORTH, POINT_4))},
-    [ZONE:FindByName(point_name(LANE_NORTH, POINT_4))]  = {[TEAM_RED] = ZONE:FindByName(point_name(LANE_NORTH, POINT_3)),  [TEAM_BLUE] = ZONE:FindByName(point_name(LANE_NORTH, POINT_5))},
-    [ZONE:FindByName(point_name(LANE_NORTH, POINT_5))]  = {[TEAM_RED] = ZONE:FindByName(point_name(LANE_NORTH, POINT_4)),  [TEAM_BLUE] = ZONE:FindByName(point_name(LANE_NORTH, POINT_6))},
-    [ZONE:FindByName(point_name(LANE_NORTH, POINT_6))]  = {[TEAM_RED] = ZONE:FindByName(point_name(LANE_NORTH, POINT_5)),  [TEAM_BLUE] = ZONE:FindByName(TEAM_RED .. "-" .. BASE)},
+    [(point_name(LANE_NORTH, POINT_1))]  = {[TEAM_RED] = (TEAM_BLUE .. "-" .. BASE),         [TEAM_BLUE] = (point_name(LANE_NORTH, POINT_2))},
+    [(point_name(LANE_NORTH, POINT_2))]  = {[TEAM_RED] = (point_name(LANE_NORTH, POINT_1)),  [TEAM_BLUE] = (point_name(LANE_NORTH, POINT_3))},
+    [(point_name(LANE_NORTH, POINT_3))]  = {[TEAM_RED] = (point_name(LANE_NORTH, POINT_2)),  [TEAM_BLUE] = (point_name(LANE_NORTH, POINT_4))},
+    [(point_name(LANE_NORTH, POINT_4))]  = {[TEAM_RED] = (point_name(LANE_NORTH, POINT_3)),  [TEAM_BLUE] = (point_name(LANE_NORTH, POINT_5))},
+    [(point_name(LANE_NORTH, POINT_5))]  = {[TEAM_RED] = (point_name(LANE_NORTH, POINT_4)),  [TEAM_BLUE] = (point_name(LANE_NORTH, POINT_6))},
+    [(point_name(LANE_NORTH, POINT_6))]  = {[TEAM_RED] = (point_name(LANE_NORTH, POINT_5)),  [TEAM_BLUE] = (TEAM_RED .. "-" .. BASE)},
     -- LANE_CENTRE
-    [ZONE:FindByName(point_name(LANE_CENTRE, POINT_1))] = {[TEAM_RED] = ZONE:FindByName(TEAM_BLUE .. "-" .. BASE),         [TEAM_BLUE] = ZONE:FindByName(point_name(LANE_CENTRE, POINT_2))},
-    [ZONE:FindByName(point_name(LANE_CENTRE, POINT_2))] = {[TEAM_RED] = ZONE:FindByName(point_name(LANE_CENTRE, POINT_1)), [TEAM_BLUE] = ZONE:FindByName(point_name(LANE_CENTRE, POINT_3))},
-    [ZONE:FindByName(point_name(LANE_CENTRE, POINT_3))] = {[TEAM_RED] = ZONE:FindByName(point_name(LANE_CENTRE, POINT_2)), [TEAM_BLUE] = ZONE:FindByName(point_name(LANE_CENTRE, POINT_4))},
-    [ZONE:FindByName(point_name(LANE_CENTRE, POINT_4))] = {[TEAM_RED] = ZONE:FindByName(point_name(LANE_CENTRE, POINT_3)), [TEAM_BLUE] = ZONE:FindByName(point_name(LANE_CENTRE, POINT_5))},
-    [ZONE:FindByName(point_name(LANE_CENTRE, POINT_5))] = {[TEAM_RED] = ZONE:FindByName(point_name(LANE_CENTRE, POINT_4)), [TEAM_BLUE] = ZONE:FindByName(point_name(LANE_CENTRE, POINT_6))},
-    [ZONE:FindByName(point_name(LANE_CENTRE, POINT_6))] = {[TEAM_RED] = ZONE:FindByName(point_name(LANE_CENTRE, POINT_5)), [TEAM_BLUE] = ZONE:FindByName(TEAM_RED .. "-" .. BASE)},
+    [(point_name(LANE_CENTRE, POINT_1))] = {[TEAM_RED] = (TEAM_BLUE .. "-" .. BASE),         [TEAM_BLUE] = (point_name(LANE_CENTRE, POINT_2))},
+    [(point_name(LANE_CENTRE, POINT_2))] = {[TEAM_RED] = (point_name(LANE_CENTRE, POINT_1)), [TEAM_BLUE] = (point_name(LANE_CENTRE, POINT_3))},
+    [(point_name(LANE_CENTRE, POINT_3))] = {[TEAM_RED] = (point_name(LANE_CENTRE, POINT_2)), [TEAM_BLUE] = (point_name(LANE_CENTRE, POINT_4))},
+    [(point_name(LANE_CENTRE, POINT_4))] = {[TEAM_RED] = (point_name(LANE_CENTRE, POINT_3)), [TEAM_BLUE] = (point_name(LANE_CENTRE, POINT_5))},
+    [(point_name(LANE_CENTRE, POINT_5))] = {[TEAM_RED] = (point_name(LANE_CENTRE, POINT_4)), [TEAM_BLUE] = (point_name(LANE_CENTRE, POINT_6))},
+    [(point_name(LANE_CENTRE, POINT_6))] = {[TEAM_RED] = (point_name(LANE_CENTRE, POINT_5)), [TEAM_BLUE] = (TEAM_RED .. "-" .. BASE)},
     -- LANE_SOUTH
-    [ZONE:FindByName(point_name(LANE_SOUTH, POINT_1))]  = {[TEAM_RED] = ZONE:FindByName(TEAM_BLUE .. "-" .. BASE),         [TEAM_BLUE] = ZONE:FindByName(point_name(LANE_SOUTH, POINT_2))},
-    [ZONE:FindByName(point_name(LANE_SOUTH, POINT_2))]  = {[TEAM_RED] = ZONE:FindByName(point_name(LANE_SOUTH, POINT_1)),  [TEAM_BLUE] = ZONE:FindByName(point_name(LANE_SOUTH, POINT_3))},
-    [ZONE:FindByName(point_name(LANE_SOUTH, POINT_3))]  = {[TEAM_RED] = ZONE:FindByName(point_name(LANE_SOUTH, POINT_2)),  [TEAM_BLUE] = ZONE:FindByName(point_name(LANE_SOUTH, POINT_4))},
-    [ZONE:FindByName(point_name(LANE_SOUTH, POINT_4))]  = {[TEAM_RED] = ZONE:FindByName(point_name(LANE_SOUTH, POINT_3)),  [TEAM_BLUE] = ZONE:FindByName(point_name(LANE_SOUTH, POINT_5))},
-    [ZONE:FindByName(point_name(LANE_SOUTH, POINT_5))]  = {[TEAM_RED] = ZONE:FindByName(point_name(LANE_SOUTH, POINT_4)),  [TEAM_BLUE] = ZONE:FindByName(point_name(LANE_SOUTH, POINT_6))},
-    [ZONE:FindByName(point_name(LANE_SOUTH, POINT_6))]  = {[TEAM_RED] = ZONE:FindByName(point_name(LANE_SOUTH, POINT_5)),  [TEAM_BLUE] = ZONE:FindByName(TEAM_RED .. "-" .. BASE)},
+    [(point_name(LANE_SOUTH, POINT_1))]  = {[TEAM_RED] = (TEAM_BLUE .. "-" .. BASE),         [TEAM_BLUE] = (point_name(LANE_SOUTH, POINT_2))},
+    [(point_name(LANE_SOUTH, POINT_2))]  = {[TEAM_RED] = (point_name(LANE_SOUTH, POINT_1)),  [TEAM_BLUE] = (point_name(LANE_SOUTH, POINT_3))},
+    [(point_name(LANE_SOUTH, POINT_3))]  = {[TEAM_RED] = (point_name(LANE_SOUTH, POINT_2)),  [TEAM_BLUE] = (point_name(LANE_SOUTH, POINT_4))},
+    [(point_name(LANE_SOUTH, POINT_4))]  = {[TEAM_RED] = (point_name(LANE_SOUTH, POINT_3)),  [TEAM_BLUE] = (point_name(LANE_SOUTH, POINT_5))},
+    [(point_name(LANE_SOUTH, POINT_5))]  = {[TEAM_RED] = (point_name(LANE_SOUTH, POINT_4)),  [TEAM_BLUE] = (point_name(LANE_SOUTH, POINT_6))},
+    [(point_name(LANE_SOUTH, POINT_6))]  = {[TEAM_RED] = (point_name(LANE_SOUTH, POINT_5)),  [TEAM_BLUE] = (TEAM_RED .. "-" .. BASE)},
     -- bases
-    [ZONE:FindByName(TEAM_RED .. "-" .. BASE)]          = {[TEAM_RED] = nil,                                               [TEAM_BLUE] = nil},
-    [ZONE:FindByName(TEAM_BLUE .. "-" .. BASE)]         = {[TEAM_RED] = nil,                                               [TEAM_BLUE] = nil},
+    [(TEAM_RED .. "-" .. BASE)]          = {[TEAM_RED] = nil,                                               [TEAM_BLUE] = nil},
+    [(TEAM_BLUE .. "-" .. BASE)]         = {[TEAM_RED] = nil,                                               [TEAM_BLUE] = nil},
 }
 
+-- env.info('=== START DEBUG ZONE_CONNECTIONS')
+-- local iter = pairs(ZONE_CONNECTIONS)
+-- local key, value = iter(ZONE_CONNECTIONS)
+-- env.info(dump_table(key))
+-- env.info('-')
+-- env.info(dump_table(value))
+-- env.info('=== END DEBUG ZONE_CONNECTIONS')
 
-function route_from_zone(team, zone)
-    -- generate a list of zones from the current zone to the last
+local ROUTE_ITERATIONS_MAX = 10
+function route_from_zone(team, zone_name)
+    -- generate a list of zones from the current zone named (zone_name) to the last
     local zones = {}
+    local iter_count = 0
 
-    while true
-        local current_zone = ZONE_CONNECTIONS[team][zone]
-        if current_zone == nil then break end
+    while iter_count < ROUTE_ITERATIONS_MAX
+    do
+        -- zone is of type ZONE_CAPTURE_COALITION
+        -- env.info("Routing: team: "..team.." from zone: "..zone_name)
+        local current_zone_pre = ZONE_CONNECTIONS[zone_name]
+        if current_zone_pre == nil then 
+            -- env.info('Could not find matching zone to start route from')
+            break 
+        end
+        
+        local current_zone_name = current_zone_pre[team]
 
+        if current_zone_name == nil then break end
+        local current_zone = ZONE:FindByName(current_zone_name)
         table.insert(zones, current_zone)
+        zone_name = current_zone_name
+        
+        iter_count = iter_count + 1
     end
     return zones
 end
@@ -274,6 +319,7 @@ SCHEDULER:New(nil, print_points, {}, INTERVAL_PRINT_SCORE,        INTERVAL_PRINT
 --        Creeps         --
 ---------------------------
 local INTERVAL_CREEP_SPAWN = 20
+local GROUP_MAX_ALIVE_UNITS = 40
 
 -- moose is dumb in that it:
 -- * wants you to use scheduled spawners, instead of using the scheduler it provides and spawn yourself
@@ -284,9 +330,10 @@ local INTERVAL_CREEP_SPAWN = 20
 local CREEP_SPAWNERS = {}
 
 for _, team in ipairs(TEAMS) do
+    CREEP_SPAWNERS[team] = {}
     for _, level in ipairs(CREEP_LEVELS) do
-        local template_name = creep_template_name(team, level)
-        CREEP_SPAWNERS[team][level] = SPAWN:NewWithAlias(template_name, template_name)
+        local template_name = creep_template_name(team, level)        
+        CREEP_SPAWNERS[team][level] = SPAWN:NewWithAlias(template_name, template_name):InitLimit(GROUP_MAX_ALIVE_UNITS,0)
     end
 end
 
@@ -294,52 +341,106 @@ function zone_route_to_waypoints(zones)
     local waypoints = {}
     
     for _, zone in ipairs(zones) do
-        local point = zone:GetPointVec2()
-        table.insert(waypoints, { x = point.x, y = 0, z = point.z })
+        local point = zone:GetPointVec3()
+        table.insert(waypoints, point)
+        -- table.insert(waypoints, zone:GetCoordinate())
     end
     return waypoints
 end
 
 
+
 function spawn_creeps_at_zone(zone)
     -- spawn and route to another zone!!
     ------ https://forum.dcs.world/topic/173928-dynamic-spawning-and-routing-in-moose/?do=findComment&comment=3432819
-
+    -- env.info('Spawning creeps at ' .. zone:GetZoneName())
     local Coalition = zone:GetCoalition()
     local team = (Coalition == coalition.side.BLUE and TEAM_BLUE or TEAM_RED)
     local level = team_creep_level(team)
-
+ 
     local spawner = CREEP_SPAWNERS[team][level]
     local randomize_point = false
-    local speed_kmh = 50
-    local formation = "Vee"
+    local speed_kmh = 420
+    local formation = FORMATION.Vee
 
-    local route = zone_route_to_waypoints(route_from_zone(team, zone))
+    
+    -- Build route to enemy base
+    local route_zones = route_from_zone(team, zone:GetName())
+    local route_waypoints = zone_route_to_waypoints(route_zones)
+    
+    if #route_zones == 0 then
+        -- env.info('Zero length route. Cannot route '..team..' from '..zone:GetName())
+        return nil
+    end
+    
+    local spawn_group = spawner:SpawnInZone(zone)    
+    if spawn_group == nil then -- If we hit GROUP_MAX_ALIVE_UNITS there would be no spawn
+        return nil
+    end 
 
-    local group = spawner
-        :SpawnInZone(zone)
-        :OnSpawnGroup(function(spawn_group)
-            function spawn_group:OnEventDead(event)
-                -- TODO: determine who got the hit and give their team credit
-                --event.IniUnit:MessageToAll("I just got killed and I am part of " .. event.IniGroupName, 15, "Alert!")
-            end)
+    -------------------------------------
+    -- TRYING TO GET ROUTING WORKING - Comments FYI only. Feel free to remove 
 
-            spawn_group:SetTask({id = "Task", params={route=route}})
-        end)
-        :Spawn()
+    -- ----------------
+    -- -- TRY: Building a route and using TaskRoute 
+    -- -- RESULT: They get routed to the CompassRose position and don't move
+    -- --          - also raises error: "CREATING PATH MAKES TOO LONG!!!!!"
+    -- --          - probably some problem with points/coords
+    -- local route_task = spawn_group:TaskRoute(route_waypoints)
+    -- spawn_group:PushTask(route_task, 5)
 
-    return group
+    -- ----------------
+    -- -- TRY: Push multiple TaskRouteToZone tasks onto the queue of the group
+    -- -- RESULT: This makes them move but only appears to route them direct to the last zone (enemy base)
+    -- --         - may be skipping past the earlier items on the queue, or not waiting until they are complete
+    -- for _, zone in ipairs(route_zones) do
+    --     local route_task = spawn_group:TaskRouteToZone(zone, randomize_point, speed_kmh, formation)
+    --     spawn_group:PushTask(route_task, 5)
+    -- end
+    
+    -- TRY: Make a combo task of multiple TaskRouteToZone tasks and pushing that
+    -- RESULT: DCS crashes
+
+    -------------------
+    -- TRY: Use some code about adding TaskFunctions to Waypoints from the docs 
+    -- RESULT: THIS WORKS. Doesn't seem a very friendly system to start with, but at least should allows handling 
+    -- further functionality at waypoints.
+    -- https://flightcontrol-master.github.io/MOOSE_DOCS_DEVELOP/Documentation/Wrapper.Controllable.html##(CONTROLLABLE).TaskFunction
+
+    local Route = {}
+    -- Get the current coordinate of the Vehicle, set it as first waypoint
+    local FromCoord = spawn_group:GetCoordinate()
+    Route[#Route+1] = FromCoord:WaypointGround(speed_kmh)
+    
+    for _, next_zone in ipairs(route_zones) do
+        local next_coord = next_zone:GetCoordinate()
+        Route[#Route+1] = next_coord:WaypointGround(speed_kmh, "Vee")
+        local TaskRouteToZone = spawn_group:TaskFunction("RouteToZone", next_zone)
+        spawn_group:SetTaskWaypoint( Route[#Route], TaskRouteToZone ) -- Set for the given Route at Waypoint 2 the TaskRouteToZone.
+    end
+    spawn_group:Route( Route, math.random( 2, 4 ) ) -- Move after a random seconds to the Route. See the Route method for details.
+
+    -- -- Register spawn_group handlers
+    -- spawn_group:OnSpawnGroup(
+    --     function spawn_group:OnEventDead(event)
+    --         -- TODO: determine who got the hit and give their team credit
+    --         --event.IniUnit:MessageToAll("I just got killed and I am part of " .. event.IniGroupName, 15, "Alert!")
+    --     end
+    -- )
+    
+    return spawn_group
 end
 
 function spawn_creeps()
     MESSAGE:New("Spawning Creeps", 5):ToAll()
 
     for _, zone in ipairs(CAPTURE_ZONES) do
+        -- zone is of type ZONE_CAPTURE_COALITION
         spawn_creeps_at_zone(zone)
     end
 end
 
-SCHEDULER:New(nil, spawn_creeps, {}, INTERVAL_CREEP_SPAWN, INTERVAL_CREEP_SPAWN)
+SCHEDULER:New(nil, spawn_creeps, {}, 5, INTERVAL_CREEP_SPAWN, INTERVAL_CREEP_SPAWN*2)
 
 
 ---------------------------
@@ -358,13 +459,13 @@ local AIRFRAME_UNLOCKS = {
     {name="F-15E",       cost=300,    [coalition.side.BLUE]=nil, [coalition.side.RED]=nil},
     {name="F-16",        cost=180,    [coalition.side.BLUE]=nil, [coalition.side.RED]=nil},
     {name="F/A-18",      cost=200,    [coalition.side.BLUE]=nil, [coalition.side.RED]=nil},
-    {name="Su-27"        cost=200,    [coalition.side.BLUE]=nil, [coalition.side.RED]=nil},
-    {name="MiG-21"       cost= 60,    [coalition.side.BLUE]=nil, [coalition.side.RED]=nil},
+    {name="Su-27",       cost=200,    [coalition.side.BLUE]=nil, [coalition.side.RED]=nil},
+    {name="MiG-21",      cost= 60,    [coalition.side.BLUE]=nil, [coalition.side.RED]=nil},
     {name="Mirage F1",   cost= 60,    [coalition.side.BLUE]=nil, [coalition.side.RED]=nil},
     {name="Mirage 2000", cost=300,    [coalition.side.BLUE]=nil, [coalition.side.RED]=nil},
     {name="AH-64D",      cost=100,    [coalition.side.BLUE]=nil, [coalition.side.RED]=nil},
     {name="OH-58",       cost= 40,    [coalition.side.BLUE]=nil, [coalition.side.RED]=nil},
-    {name="Mi-8"         cost= 60,    [coalition.side.BLUE]=nil, [coalition.side.RED]=nil},
+    {name="Mi-8",        cost= 60,    [coalition.side.BLUE]=nil, [coalition.side.RED]=nil},
     {name="Mi-24",       cost= 80,    [coalition.side.BLUE]=nil, [coalition.side.RED]=nil},
     {name="Ka-52",       cost=120,    [coalition.side.BLUE]=nil, [coalition.side.RED]=nil},
     {name="UH-1H",       cost= 40,    [coalition.side.BLUE]=nil, [coalition.side.RED]=nil},
@@ -391,7 +492,12 @@ function setup_radio_menu_spawn(team)
     spawn_menu          = MENU_COALITION:New(team, "Spawn Unlocks")
 
     for _, airframe in ipairs(AIRFRAME_UNLOCKS) do
-        airframe[team] = MENU_COALITION_COMMAND:New(team, "Unlock " .. airframe.name .. "    [" .. airframe.cost .. "]", spawn_menu, function unlock_and_remove_menu(team, airframe) end)
+        airframe[team] = MENU_COALITION_COMMAND:New(
+            team,
+            "Unlock " .. airframe.name .. "    [" .. airframe.cost .. "]",
+            spawn_menu,
+            unlock_and_remove_menu(team, airframe)
+        )
     end
 end
 
@@ -406,6 +512,10 @@ local CREEP_MENUS = {
     [coalition.side.BLUE] = nil,
     [coalition.side.RED]  = nil,
 }
+
+function upgrade_creep_stub()
+    -- just a function created while removing syntax errors in upgrade_creeps. I'm probably misinterpreting the original intent.
+end
 
 function team_creep_increment_level(team)
 end
@@ -427,13 +537,19 @@ function upgrade_creeps(team)
         -- add tier N+1 upgrade menu item
         -- dont add menu item if we've hit max level
         if team_creep_increment_level(team) then
-            CREEP_MENUS[team] = MENU_COALITION_COMMAND:New(team, creep_upgrade_text(team), creep_menu, function upgrade_creeps(team) end)
+            CREEP_MENUS[team] = MENU_COALITION_COMMAND:New(
+                team, 
+                creep_upgrade_text(team), 
+                creep_menu, 
+                upgrade_creep_stub
+            )
         end
+    end
 end
 
 function setup_radio_menu_creeps(team)
     local creep_menu  = MENU_COALITION:New(team, "Creep Upgrades")
-    CREEP_MENUS[team] = MENU_COALITION_COMMAND:New(team, creep_upgrade_text(team), creep_menu, function upgrade_creeps(team) end)
+    CREEP_MENUS[team] = MENU_COALITION_COMMAND:New(team, creep_upgrade_text(team), creep_menu, upgrade_creeps(team))
 end
 
 function setup_radio_menu()
@@ -443,6 +559,7 @@ function setup_radio_menu()
     end
 end
 
+MESSAGE:New("DOTA: LOAD END", 10):ToAll()
 
 ---------------------------
 --   Victory Conditions  --
@@ -722,5 +839,19 @@ world.addEventHandler(onEventWaypointReached)
 
 
 
-
-
+---------------------------
+--        Utility        --
+---------------------------
+function dump_table(o)
+    -- dumps a table as text (handles recursive tables)
+    if type(o) == 'table' then
+       local s = '{ '
+       for k,v in pairs(o) do
+          if type(k) ~= 'number' then k = '"'..k..'"' end
+          s = s .. '['..k..'] = ' .. dump_table(v) .. ','
+       end
+       return s .. '} '
+    else
+       return tostring(o)
+    end
+ end
